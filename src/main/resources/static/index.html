@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Code Reviewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      color: #f0f6fc;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      color: #8b949e;
+      margin-top: 6px;
+      font-size: 0.9rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 860px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .card label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+    }
+
+    .top-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    select {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    select:focus { outline: none; border-color: #58a6ff; }
+
+    textarea {
+      width: 100%;
+      min-height: 260px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      padding: 14px;
+      resize: vertical;
+      tab-size: 2;
+    }
+
+    textarea:focus { outline: none; border-color: #58a6ff; }
+    textarea::placeholder { color: #484f58; }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover:not(:disabled) { background: #2ea043; }
+    button:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #484f58;
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #results { display: none; }
+
+    .rating-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+
+    .rating-Excellent  { background: #1a4731; color: #3fb950; }
+    .rating-Good       { background: #1c3a5e; color: #58a6ff; }
+    .rating-NeedsWork  { background: #3d2b00; color: #e3b341; }
+    .rating-Poor       { background: #3d0f0f; color: #f85149; }
+
+    .result-section { margin-bottom: 18px; }
+
+    .result-section h3 {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #8b949e;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .result-section p {
+      color: #c9d1d9;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    ul.findings {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    ul.findings li {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-left: 3px solid;
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    .bugs-list    li { border-left-color: #f85149; }
+    .quality-list li { border-left-color: #e3b341; }
+    .improve-list li { border-left-color: #3fb950; }
+
+    .empty { color: #484f58; font-style: italic; font-size: 0.88rem; }
+
+    .error-box {
+      background: #3d0f0f;
+      border: 1px solid #f85149;
+      border-radius: 6px;
+      padding: 14px;
+      color: #f85149;
+      font-size: 0.88rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ AI Code Reviewer</h1>
+  <p>Paste your code and get instant AI feedback on bugs, quality, and improvements.</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <div class="top-row" style="margin-bottom:12px;">
+      <div>
+        <label>Language</label>
+        <select id="language">
+          <option>Java</option>
+          <option>Python</option>
+          <option>JavaScript</option>
+          <option>TypeScript</option>
+          <option>C++</option>
+          <option>Go</option>
+          <option>SQL</option>
+        </select>
+      </div>
+    </div>
+    <label>Code Snippet</label>
+    <textarea id="code" placeholder="Paste your code here..."></textarea>
+  </div>
+
+  <button id="reviewBtn" onclick="submitReview()">Review My Code</button>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="card" id="results">
+    <div class="result-section">
+      <h3>Summary <span id="ratingBadge" class="rating-badge"></span></h3>
+      <p id="summary"></p>
+    </div>
+
+    <div class="result-section">
+      <h3>🐛 Bugs</h3>
+      <ul class="findings bugs-list" id="bugsList"></ul>
+    </div>
+
+    <div class="result-section">
+      <h3>⚠️ Code Quality Issues</h3>
+      <ul class="findings quality-list" id="qualityList"></ul>
+    </div>
+
+    <div class="result-section" style="margin-bottom:0">
+      <h3>💡 Improvements</h3>
+      <ul class="findings improve-list" id="improveList"></ul>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  async function submitReview() {
+    const code = document.getElementById('code').value.trim();
+    const language = document.getElementById('language').value;
+    const btn = document.getElementById('reviewBtn');
+    const errorBox = document.getElementById('errorBox');
+    const results = document.getElementById('results');
+
+    if (!code) {
+      showError('Please paste some code before reviewing.');
+      return;
+    }
+
+    errorBox.style.display = 'none';
+    results.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Reviewing...';
+
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, language })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError(data.error || 'Something went wrong. Please try again.');
+        return;
+      }
+
+      renderResults(data);
+
+    } catch (e) {
+      showError('Could not connect to the server. Is the app running?');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Review My Code';
+    }
+  }
+
+  function renderResults(data) {
+    document.getElementById('summary').textContent = data.summary || '—';
+
+    const ratingKey = (data.overallRating || '').replace(/\s+/g, '');
+    const badge = document.getElementById('ratingBadge');
+    badge.textContent = data.overallRating || 'Unknown';
+    badge.className = 'rating-badge rating-' + ratingKey;
+
+    fillList('bugsList',    data.bugs);
+    fillList('qualityList', data.codeQualityIssues);
+    fillList('improveList', data.improvements);
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function fillList(id, items) {
+    const ul = document.getElementById(id);
+    ul.innerHTML = '';
+    if (!items || items.length === 0) {
+      ul.innerHTML = '<li class="empty">None found ✓</li>';
+    } else {
+      items.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        ul.appendChild(li);
+      });
+    }
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('errorBox');
+    box.textContent = msg;
+    box.style.display = 'block';
+  }
+
+  // Allow Tab key inside textarea
+  document.getElementById('code').addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = this.selectionStart;
+      this.value = this.value.substring(0, s) + '  ' + this.value.substring(this.selectionEnd);
+      this.selectionStart = this.selectionEnd = s + 2;
+    }
+  });
+</script>
+
+</body>
+</html>
